@@ -77,10 +77,10 @@ class ReflexAgent(Agent):
         newGhostStates = successorGameState.getGhostStates()
         newScaredTimes = [
             ghostState.scaredTimer for ghostState in newGhostStates]
-        print(newPos)
-        print(newFood)
-        print(newGhostStates)
-        print(newScaredTimes)
+        # print(newPos)
+        # print(newFood)
+        # print(newGhostStates)
+        # print(newScaredTimes)
 
         # make is so that if it is closer to a ghost then reduce the score
         # increase if closer to food
@@ -163,7 +163,81 @@ class MinimaxAgent(MultiAgentSearchAgent):
         Returns whether or not the game state is a losing state
         """
         "*** YOUR CODE HERE ***"
-        util.raiseNotDefined()
+        # Use function for min and max of node
+        # need same args to call main_delegation again after agents turn
+        # mechanism to keep track with agenCount whether ghost or pacman
+        def min_recurse(depth, agentCount, gameState):
+            # action value pair
+            best_action = ""
+            best_value = 1000
+            node_actions = gameState.getLegalActions(agentCount)
+            # base
+            if not node_actions:
+                # print(self.depth)
+                return self.evaluationFunction(gameState)
+
+            for successor in node_actions:
+                curr_succ = gameState.generateSuccessor(agentCount, successor)
+
+                value_node = main_delegation(depth, agentCount + 1, curr_succ)
+                
+                if type(value_node) is list:
+                    updated_action = value_node[1]
+                else: 
+                    updated_action = value_node
+                # update best_action
+                if updated_action < best_value:
+                    best_action = successor
+                    best_value = updated_action
+            return [best_action, best_value]
+
+        def max_recurse(depth, agentCount, gameState):
+            # action value pair
+            best_action = ""
+            best_value = -1000
+            node_actions = gameState.getLegalActions(agentCount)
+
+            # base
+            if not node_actions:
+                # print(self.depth)
+                return self.evaluationFunction(gameState)
+
+            for successor in node_actions:
+                curr_succ = gameState.generateSuccessor(agentCount, successor)
+
+                value_node = main_delegation(depth, agentCount + 1, curr_succ)
+                
+                if type(value_node) is list:
+                    updated_action = value_node[1]
+                else: 
+                    updated_action = value_node
+                # update best_action
+                if updated_action > best_value:
+                    best_action = successor
+                    best_value = updated_action
+            return [best_action, best_value]
+
+            
+        # main recurring function depending on who the player is
+        def main_delegation(depth, agentCount, gameState):
+            # see if all ghosts or agent recursed this time
+            iterAgentCount = gameState.getNumAgents()
+            if iterAgentCount <= agentCount:
+                agentCount = 0
+                depth += 1
+            
+            # stopping mechanisms
+            if depth == self.depth:
+                return self.evaluationFunction(gameState)
+            if gameState.isWin() or gameState.isLose():
+                return self.evaluationFunction(gameState)
+
+            if agentCount == 0:
+                return max_recurse(depth, agentCount, gameState)
+            else: 
+                return min_recurse(depth, agentCount, gameState)
+        
+        return main_delegation(0, 0, gameState)[0]
 
 
 class AlphaBetaAgent(MultiAgentSearchAgent):
