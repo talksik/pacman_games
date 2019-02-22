@@ -166,10 +166,12 @@ class MinimaxAgent(MultiAgentSearchAgent):
         # Use function for min and max of node
         # need same args to call main_delegation again after agents turn
         # mechanism to keep track with agenCount whether ghost or pacman
+        INF, NEG_INF = float("inf"), -float("inf")
+
         def min_recurse(depth, agentCount, gameState):
             # action value pair
             best_action = ""
-            best_value = 1000
+            best_value = INF
             node_actions = gameState.getLegalActions(agentCount)
             # base
             if not node_actions:
@@ -194,7 +196,7 @@ class MinimaxAgent(MultiAgentSearchAgent):
         def max_recurse(depth, agentCount, gameState):
             # action value pair
             best_action = ""
-            best_value = -1000
+            best_value = NEG_INF
             node_actions = gameState.getLegalActions(agentCount)
 
             # base
@@ -250,13 +252,134 @@ class AlphaBetaAgent(MultiAgentSearchAgent):
         Returns the minimax action using self.depth and self.evaluationFunction
         """
         "*** YOUR CODE HERE ***"
-        util.raiseNotDefined()
+        INF, NEG_INF = float("inf"), -float("inf")
+
+        def min_recurse(depth, agentCount, gameState, alpha, beta):
+            # action value pair
+            best_action = ""
+            best_value = INF
+            node_actions = gameState.getLegalActions(agentCount)
+            # base
+            if not node_actions:
+                # print(self.depth)
+                return self.evaluationFunction(gameState)
+
+            for successor in node_actions:
+                curr_succ = gameState.generateSuccessor(agentCount, successor)
+
+                value_node = main_delegation(depth, agentCount + 1, curr_succ, alpha, beta)
+                
+                if type(value_node) is list:
+                    updated_action = value_node[1]
+                else: 
+                    updated_action = value_node
+                # update best_action
+                if updated_action < best_value:
+                    best_action = successor
+                    best_value = updated_action
+                
+                # pruning
+                if updated_action < alpha:
+                    return [successor, updated_action]
+                
+                beta = min([beta, updated_action])
+            return [best_action, best_value]
+
+        def max_recurse(depth, agentCount, gameState, alpha, beta):
+            # action value pair
+            best_action = ""
+            best_value = NEG_INF
+            node_actions = gameState.getLegalActions(agentCount)
+
+            # base
+            if not node_actions:
+                # print(self.depth)
+                return self.evaluationFunction(gameState)
+
+            for successor in node_actions:
+                curr_succ = gameState.generateSuccessor(agentCount, successor)
+
+                value_node = main_delegation(depth, agentCount + 1, curr_succ, alpha, beta)
+                
+                if type(value_node) is list:
+                    updated_action = value_node[1]
+                else: 
+                    updated_action = value_node
+                # update best_action
+                if updated_action > best_value:
+                    best_action = successor
+                    best_value = updated_action
+
+                # pruning
+                if updated_action > beta:
+                    return [successor, updated_action]
+
+                alpha = max([alpha, updated_action])
+            return [best_action, best_value]
+
+            
+        # main recurring function depending on who the player is
+        def main_delegation(depth, agentCount, gameState, alpha, beta):
+            # see if all ghosts or agent recursed this time
+            iterAgentCount = gameState.getNumAgents()
+            if iterAgentCount <= agentCount:
+                agentCount = 0
+                depth += 1
+            
+            # stopping mechanisms
+            if depth == self.depth:
+                return self.evaluationFunction(gameState)
+            if gameState.isWin() or gameState.isLose():
+                return self.evaluationFunction(gameState)
+
+            if agentCount == 0:
+                return max_recurse(depth, agentCount, gameState, alpha, beta)
+            else: 
+                return min_recurse(depth, agentCount, gameState, alpha, beta)
+        
+        return main_delegation(0, 0, gameState, NEG_INF, INF)[0]
 
 
 class ExpectimaxAgent(MultiAgentSearchAgent):
     """
       Your expectimax agent (question 4)
     """
+
+    def max_recurse(self, gameState, depth):
+        node_actions = gameState.getLegalActions(0)
+
+        if not node_actions:
+            return self.evaluationFunction(gameState), None
+        if depth > self.depth or gameState.isWin():
+            return self.evaluationFunction(gameState), None
+
+        costs = []
+        for successor in node_actions:
+            curr_succ = gameState.generateSuccessor(0, successor)
+            costs.append((self.expected_recurse(curr_succ, 1, depth)[0], successor))
+        return max(costs)
+    
+    def expected_recurse(self, gameState, agentCount, depth):
+        node_actions = gameState.getLegalActions(agentCount)
+
+        if not node_actions:
+            return self.evaluationFunction(gameState), None
+        if gameState.isLose():
+            return self.evaluationFunction(gameState), None
+
+        costs = []
+        for successor in node_actions:
+            curr_succ = gameState.generateSuccessor(agentCount, successor)
+            
+            iterAgents = gameState.getNumAgents() - 1
+            if iterAgents == agentCount:
+                costs.append(self.max_recurse(curr_succ, depth + 1))
+            else: 
+                costs.append(self.expected_recurse(curr_succ, agentCount + 1, depth))
+
+        # calculating averages for optimization
+        sum_costs = map(lambda x: float(x[0]) / len(costs), costs)
+        return sum(sum_costs), None
 
     def getAction(self, gameState):
         """
@@ -266,7 +389,8 @@ class ExpectimaxAgent(MultiAgentSearchAgent):
         legal moves.
         """
         "*** YOUR CODE HERE ***"
-        util.raiseNotDefined()
+        result = self.max_recurse(gameState, 1)
+        return result[1]
 
 
 def betterEvaluationFunction(currentGameState):
@@ -277,7 +401,18 @@ def betterEvaluationFunction(currentGameState):
     DESCRIPTION: <write something here so we know what you did>
     """
     "*** YOUR CODE HERE ***"
-    util.raiseNotDefined()
+    ghostStates = currentGameState.getGhostStates()
+    totalScore = currentGameState.getScore()
+    pacPos = currentGameState.getPacmanPosition()
+    all_food = currentGameState.getFood().asList()
+
+    # find the furthest food distance to make it reach that pellet faster
+    all_dist = [1.0 / manhattanDistance(foodPos, pacPos) for foodPos in all_food]
+    # for last state
+    all_dist.append(0) 
+
+    return max(all_dist) + totalScore
+    
 
 
 # Abbreviation
